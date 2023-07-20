@@ -76,43 +76,69 @@ void MyWindowsPlugin::HandleMethodCall(
         // to create a device context and start the print job.
         // Then, use the "StartPage" and "EndPage" APIs to handle each page of the print job.
         // Finally, use the "EndDoc" and "DeleteDC" APIs to complete the print job.
-import ctypes
-from ctypes import wintypes
+        #include <iostream>
+#include <windows.h>
 
-# Constants
-PRINTER_DEFAULTS = {"DesiredAccess": winspool.PRINTER_ACCESS_USE}
-RAW_DATA_TYPE = "RAW"
+void printRawData(const std::string& printerName, const uint8_t* data, size_t dataSize)
+{
+    HANDLE hPrinter;
+    DOC_INFO_1 docInfo;
+    DWORD bytesWritten = 0;
 
-# Windows API functions
-winspool = ctypes.windll.winspool.drv
+    // Open the printer
+    if (!OpenPrinter(const_cast<LPSTR>(printerName.c_str()), &hPrinter, nullptr))
+    {
+        std::cerr << "Failed to open the printer. Error code: " << GetLastError() << std::endl;
+        return;
+    }
 
-def print_raw_data(printer_name, data):
-    # Open the printer
-    hPrinter = wintypes.HANDLE(0)
-    printer_defaults = wintypes.DEVHTND(PRINTER_DEFAULTS)
-    winspool.OpenPrinterW(printer_name, ctypes.byref(hPrinter), ctypes.byref(printer_defaults))
+    // Set up the document information
+    docInfo.pDocName = const_cast<LPSTR>("My Document");
+    docInfo.pOutputFile = nullptr;
+    docInfo.pDataType = const_cast<LPSTR>("RAW");
 
-    # Start a print job
-    doc_info = wintypes.DOCINFOW()
-    doc_info.pDocName = "My Document"
-    doc_info.pOutputFile = None
-    doc_info.pDatatype = RAW_DATA_TYPE
-    winspool.StartDocPrinterW(hPrinter, 1, ctypes.byref(doc_info))
+    // Start a print job
+    if (StartDocPrinter(hPrinter, 1, reinterpret_cast<LPBYTE>(&docInfo)) == 0)
+    {
+        std::cerr << "Failed to start the print job. Error code: " << GetLastError() << std::endl;
+        ClosePrinter(hPrinter);
+        return;
+    }
 
-    # Start a page
-    winspool.StartPagePrinter(hPrinter)
+    // Start a page
+    if (StartPagePrinter(hPrinter) == 0)
+    {
+        std::cerr << "Failed to start the page. Error code: " << GetLastError() << std::endl;
+        EndDocPrinter(hPrinter);
+        ClosePrinter(hPrinter);
+        return;
+    }
 
-    # Write data to the printer
-    data_len = len(data)
-    bytes_written = wintypes.DWORD(0)
-    winspool.WritePrinter(hPrinter, data, data_len, ctypes.byref(bytes_written))
+    // Write data to the printer
+    if (WritePrinter(hPrinter, data, static_cast<DWORD>(dataSize), &bytesWritten) == 0)
+    {
+        std::cerr << "Failed to write data to the printer. Error code: " << GetLastError() << std::endl;
+        EndPagePrinter(hPrinter);
+        EndDocPrinter(hPrinter);
+        ClosePrinter(hPrinter);
+        return;
+    }
 
-    # End the page and print job
-    winspool.EndPagePrinter(hPrinter)
-    winspool.EndDocPrinter(hPrinter)
+    // End the page and print job
+    if (EndPagePrinter(hPrinter) == 0)
+    {
+        std::cerr << "Failed to end the page. Error code: " << GetLastError() << std::endl;
+    }
 
-    # Close the printer
-    winspool.ClosePrinter(hPrinter)
+    if (EndDocPrinter(hPrinter) == 0)
+    {
+        std::cerr << "Failed to end the print job. Error code: " << GetLastError() << std::endl;
+    }
+
+    // Close the printer
+    ClosePrinter(hPrinter);
+}
+
         result->Success();
       } else {
         result->Error("INVALID_ARGUMENT", "Invalid or missing filename.");
